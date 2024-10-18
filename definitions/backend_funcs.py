@@ -13,46 +13,14 @@ import definitions.layout_styles as styles
 
 # ===== DATA PROCESSING FUNCTIONS ==============================================================
 
-results_directory = './assets/results/'
+# results_directory = './assets/results/'
+# def check_results_directory(input_path):
 
 
-def detect_models(resdir=results_directory, out_clean=False):
+def detect_models(resdir):
     all_models = [x[0].split('/')[-1] for x in os.walk(resdir)][1:]  # assume all stored in resdir
 
     all_model_names = list(set([x.split('.')[1] for x in all_models]))  # assume structure lh.name.measure
-
-    if out_clean:
-        clean_dic = {'base model': {'covariate_base': 'Covariates only'},
-                     'prenatal models': {'prenatal_stress_conf_adjusted': 'Prenatal ELS - confound. adjusted',
-                                         'prenatal_stress_mini_adjusted': 'Prenatal ELS - minimal. adjusted',
-                                         'prenatal_stress_cthick_adjusted': 'Prenatal ELS + cort. thickness',
-                                         'prenatal_stress_nonlinear': 'Prenatal ELS - non-linear',
-                                         'prenatal_stress_by_sex': 'Prenatal ELS by sex',
-                                         'prenatal_stress_by_age': 'Prenatal ELS by age',
-                                         'prenatal_stress_by_ethnicity': 'Prenatal ELS by ethnicity',
-                                         'prenatal_domains': 'Prenatal domains (all)',
-                                         'pre_life_events': 'Prenatal life events',
-                                         'pre_contextual_risk': 'Prenatal contextual risk',
-                                         'pre_parental_risk': 'Prenatal parental risk',
-                                         'pre_interpersonal_risk': 'Prenatal interpersonal risk'},
-                     'postnatal models': {'postnatal_stress_conf_adjusted': 'Postnatal ELS - confound. adjusted',
-                                          'postnatal_stress_mini_adjusted': 'Postnatal ELS - minimal. adjusted',
-                                          'postnatal_stress_cthick_adjusted': 'Postnatal ELS + cort. thickness',
-                                          'postnatal_stress_nonlinear': 'Postnatal ELS - non-linear',
-                                          'postnatal_stress_by_sex': 'Postnatal ELS by sex',
-                                          'postnatal_stress_by_age': 'Postnatal ELS by age',
-                                          'postnatal_stress_by_ethnicity': 'Postnatal ELS by ethnicity',
-                                          'postnatal_domains': 'Postnatal domains (all)',
-                                          'post_life_events': 'Postnatal life events',
-                                          'post_contextual_risk': 'Postnatal contextual risk',
-                                          'post_parental_risk': 'Postnatal parental risk',
-                                          'post_interpersonal_risk': 'Postnatal interpersonal risk',
-                                          'post_direct_victimization': 'Postnatal direct victimization'}}
-        dic_model_names = [ele for ww in clean_dic.keys() for ele in clean_dic[ww]]
-        if not set(all_model_names) == set(dic_model_names):
-            return all_model_names
-        else:
-            return clean_dic
 
     out_terms = {}
     for model in all_model_names:
@@ -63,12 +31,13 @@ def detect_models(resdir=results_directory, out_clean=False):
         out_terms[model] = dict(zip(list(stacks.stack_name)[1:], list(stacks.stack_number)[1:]))
 
     # Assume you have left and right hemispheres are always run
+
     return out_terms
 
 
-def extract_results(model, term, thr='30'):
+def extract_results(resdir, model, term, thr='30'):
 
-    stack = detect_models()[model][term]
+    stack = detect_models(resdir)[model][term]
 
     min_beta = []
     max_beta = []
@@ -79,7 +48,7 @@ def extract_results(model, term, thr='30'):
     sign_betas_left_right = {}
 
     for hemi in ['left', 'right']:
-        mdir = f'{results_directory}{hemi[0]}h.{model}.w_g.pct'
+        mdir = f'{resdir}{hemi[0]}h.{model}.w_g.pct'
         # Read significant cluster map
         ocn = nb.load(f'{mdir}/stack{stack}.cache.th{thr}.abs.sig.ocn.mgh')
         sign_clusters = np.array(ocn.dataobj).flatten()
@@ -112,10 +81,10 @@ def extract_results(model, term, thr='30'):
     return np.nanmin(min_beta), np.nanmax(max_beta), np.nanmean(med_beta), n_clusters, sign_clusters_left_right, sign_betas_left_right
 
 
-def compute_overlap(model1, term1, model2, term2):
+def compute_overlap(resdir, model1, term1, model2, term2):
 
-    sign_clusters1 = extract_results(model1, term1)[4]
-    sign_clusters2 = extract_results(model2, term2)[4]
+    sign_clusters1 = extract_results(resdir, model1, term1)[4]
+    sign_clusters2 = extract_results(resdir, model2, term2)[4]
 
     ovlp_maps = {}
     ovlp_info = {}
@@ -158,13 +127,14 @@ def fetch_surface(resolution):
 # ---------------------------------------------------------------------------------------------
 
 
-def plot_surfmap(model,
+def plot_surfmap(resdir,
+                 model,
                  term,
                  surf='pial',  # 'pial', 'infl', 'flat', 'sphere'
                  resol='fsaverage6',
                  output='betas'):
 
-    min_beta, max_beta, mean_beta, n_clusters, sign_clusters, sign_betas = extract_results(model, term)
+    min_beta, max_beta, mean_beta, n_clusters, sign_clusters, sign_betas = extract_results(resdir, model, term)
 
     fs_avg, n_nodes = fetch_surface(resol)
 
@@ -219,9 +189,9 @@ def plot_surfmap(model,
 # ---------------------------------------------------------------------------------------------
 
 
-def plot_overlap(model1, term1, model2, term2, surf='pial', resol='fsaverage6'):
+def plot_overlap(resdir, model1, term1, model2, term2, surf='pial', resol='fsaverage6'):
 
-    ovlp_maps = compute_overlap(model1, term1, model2, term2)[1]
+    ovlp_maps = compute_overlap(resdir, model1, term1, model2, term2)[1]
 
     fs_avg, n_nodes = fetch_surface(resol)
 
