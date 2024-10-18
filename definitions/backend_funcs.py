@@ -14,23 +14,45 @@ import definitions.layout_styles as styles
 # ===== DATA PROCESSING FUNCTIONS ==============================================================
 
 # results_directory = './assets/results/'
+# /Users/Serena/Desktop/PA-brain-project/results/
 # def check_results_directory(input_path):
 
 
 def detect_models(resdir):
-    all_models = [x[0].split('/')[-1] for x in os.walk(resdir)][1:]  # assume all stored in resdir
+    # Make sure path is correctly specified
+    resdir = f'{resdir}/' if resdir[-1] != '/' else resdir
 
-    all_model_names = list(set([x.split('.')[1] for x in all_models]))  # assume structure lh.name.measure
+    # List all results; ASSUME all results are stored in one directory
+    all_results = [x[0].split('/')[-1] for x in os.walk(resdir)][1:]
 
+    # Clean bad result files, and notify user ========================================================
+    # ASSUME that if the stack_names files exists the folder is good
+    # ASSUME directory names with structure = lh.name.measure
+    for result in all_results:
+        if not os.path.isfile(f'{resdir}{result}/stack_names.txt'):
+            print(f'There is a problem with "{result}". Removing the model from overview')
+            all_results.remove(result)
+
+    results_df = pd.DataFrame([x.split('.') for x in all_results], columns=['hemi','name','measure'])
+    count_hemis = results_df.groupby(['name', 'measure']).count()
+    only_one_hm = list(count_hemis.loc[count_hemis.hemi < 2].index)
+    if len(only_one_hm) > 0:
+        to_remove = [f'{mod}.{meas}' for mod, meas in only_one_hm]
+        print(f'Models: {to_remove} where estimated in one hemisphere only. This is currently not supported')
+        clean_results = [x for x in all_results if not any(bad_model in x for bad_model in to_remove)]
+    else:
+        clean_results = all_results
+
+    # Extract the terms for each model ===============================================================
+    # ASSUME that if the model_name is the same, then lh/rh have the same model
     out_terms = {}
-    for model in all_model_names:
-        # Assume you have left and right hemispheres are always run and with the same model
-        mdir = f'{resdir}lh.{model}.w_g.pct'
-        stacks = pd.read_table(f'{mdir}/stack_names.txt', delimiter="\t")
+    for result in clean_results:
+        model_name = '.'.join(result.split('.')[1:3])
+        if not model_name in list(out_terms.keys()):
+            # Read terms (i.e. stack) names
+            stacks = pd.read_table(f'{resdir}{result}/stack_names.txt', delimiter="\t")
 
-        out_terms[model] = dict(zip(list(stacks.stack_name)[1:], list(stacks.stack_number)[1:]))
-
-    # Assume you have left and right hemispheres are always run
+            out_terms[model_name] = dict(zip(list(stacks.stack_name)[1:], list(stacks.stack_number)[1:]))
 
     return out_terms
 
@@ -48,7 +70,7 @@ def extract_results(resdir, model, term, thr='30'):
     sign_betas_left_right = {}
 
     for hemi in ['left', 'right']:
-        mdir = f'{resdir}{hemi[0]}h.{model}.w_g.pct'
+        mdir = f'{resdir}{hemi[0]}h.{model}'
         # Read significant cluster map
         ocn = nb.load(f'{mdir}/stack{stack}.cache.th{thr}.abs.sig.ocn.mgh')
         sign_clusters = np.array(ocn.dataobj).flatten()
